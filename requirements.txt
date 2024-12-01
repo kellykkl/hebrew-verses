@@ -1,6 +1,2 @@
 flask
 pandas
-certifi==2024.8.30
-gpg==1.24.0
-meson==1.6.0
-packaging==24.2
