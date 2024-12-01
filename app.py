@@ -10,7 +10,7 @@ def process_data():
     vocab = data['input2']
 
     # Example: Load and manipulate a CSV file
-    df = pd.read_csv('BHS_with_Biblingo.csv')
+    df = pd.read_csv('BHS_with_biblingo.csv')
     filtered_df = df.query('Grammar == {} and Vocab <= {}'.format(grammar, vocab))
 
     # Return the processed data
