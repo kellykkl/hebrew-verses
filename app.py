@@ -13,6 +13,9 @@ def process_data():
     df = pd.read_csv('BHS_w_biblingo.csv')
     filtered_df = df.query('Grammar == {} and Vocab <= {}'.format(grammar, vocab))
 
+    # Replace NaN with None (JSON-compliant null)
+    filtered_df = filtered_df.where(pd.notnull(filtered_df), None)
+
     # Return the processed data
     return jsonify(filtered_df.to_dict(orient='records'))
 
