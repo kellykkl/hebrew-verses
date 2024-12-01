@@ -35,7 +35,9 @@ def clean_hebrew_text(concatenated_text):
 
 @app.route('/process', methods=['POST'])
 def process_data():
-
+    data = request.get_json()
+    grammar = data['input1']
+    vocab = data['input2']
 
     # Example: Load and manipulate a CSV file
     df = pd.read_csv('BHS_w_biblingo.csv')
