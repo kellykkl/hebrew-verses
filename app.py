@@ -79,10 +79,10 @@ def process_data():
     df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
     merged = pd.merge(wanted, df, on='ESVLocation', how='left')
 
-    merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list))').index, 'Highlight'] = True
+    merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)').index, 'Highlight'] = True
     merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
 
-    merged.loc[merged.query('Vocab.isin(@vocab_list) and Grammar.isin(@vocab_list)').index, 'KnownBefore'] = True
+    merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
     merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
 
     merged['StyledWord'] = merged.apply(lambda row: color_text(row['BHSwordPointed'], row['Highlight'], row['KnownBefore']), axis=1)
