@@ -5,11 +5,13 @@ import re
 app = Flask(__name__)
 
 # Function to wrap text in <span> tags
-def color_text(word, highlight, known):
+def color_text(word, highlight, known, proper):
     if highlight:
         return f'<span style="color:green;">{word}</span>'
-    elif known:
+    elif (known and not proper):
         return f'<span style="color:blue;">{word}</span>'
+    elif proper:
+        return f'<span style="color:gray;">{word}</span>'
     else:
         return word
 
@@ -84,7 +86,10 @@ def process_data():
     merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
     merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
 
-    merged['StyledWord'] = merged.apply(lambda row: color_text(row['BHSwordPointed'], row['Highlight'], row['KnownBefore']), axis=1)
+    merged.loc[merged.query('morphologyDetail.str.contains("proper noun")').index, 'ProperNoun'] = True
+    merged[['ProperNoun']] = merged[['ProperNoun']].fillna(value=False)
+
+    merged['StyledWord'] = merged.apply(lambda row: color_text(row['BHSwordPointed'], row['Highlight'], row['KnownBefore'], row['ProperNoun']), axis=1)
 
      
     concatenated = (
