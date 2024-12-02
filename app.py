@@ -18,19 +18,18 @@ def clean_hebrew_text(concatenated_text):
     cleaned_text = concatenated_text.replace("nan", "").strip()
     
     # List of Hebrew prefixes that should not have a space after them
-    prefixes = ['הֶ','לֵ', 'בְ', 'עִם', 'כְ', 'הַ', 'מִ', 'שׁ','וְ','וַ','הָ','לְ','בָּ','בְּ']
+    prefixes = ['כְ','מֵ','מִ','וָ','וְ','וַ','הֶ','הַ','הָ','לָ','לַ','לֵ','לְ','בַ','בָ','בְ','בַּ','בָּ','בְּ','כַ','כָ','כְּ','כַּ','כָּ','וּ']
     
     # Loop through each prefix and remove space after it if present
     for prefix in prefixes:
-        cleaned_text = re.sub(rf'({prefix})\s+', r'\1', cleaned_text)
-        cleaned_text = re.sub(rf'({prefix}</span>)\s+', r'\1', cleaned_text)
+        cleaned_text = re.sub(rf'(?<!\S)({prefix})\s+', r'\1', cleaned_text)
+        cleaned_text = re.sub(rf'(?<!\S)({prefix}</span>)\s+', r'\1', cleaned_text)
 
     # Remove spaces after words that are followed by the maqaf (־)
     cleaned_text = re.sub(r'(\S)־\s+', r'\1־', cleaned_text)
     cleaned_text = re.sub(r'(\S)־</span>\s+', r'\1־</span>', cleaned_text)
  
     return cleaned_text
-
 
 
 @app.route('/process', methods=['POST'])
