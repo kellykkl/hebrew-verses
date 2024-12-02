@@ -39,22 +39,37 @@ def process_data():
     grammar = data['input1']
     vocab = data['input2']
 
+    grammar_li = grammar.split(',')
+    vocab_li = vocab.split(',')
+
+    # Remove elements in grammar_list from vocab_list
+    vocab_li = [item for item in vocab_li if item not in grammar_li]
+
+    grammar_list = [float(x) for x in grammar_li]
+    vocab_list = [float(x) for x in vocab_li]
+
     # Example: Load and manipulate a CSV file
     df = pd.read_csv('BHS_w_biblingo.csv')
-    filtered_df = df.query('Grammar == {} and Vocab <= {}'.format(grammar, vocab))
+    filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
+    filtered_df_broader = df.query('(Grammar.isin(@grammar_list) or Grammar.isin(@vocab_list) or Grammar == 1.0) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
 
     # Group by 'ESVLocation' and count rows matching the condition
     grouped = df.groupby('ESVLocation').size().reset_index(name='TotalCount')
-    filtered_count = filtered_df.groupby('ESVLocation').size().reset_index(name='FilteredCount')
+    filtered_count = filtered_df_broader.groupby('ESVLocation').size().reset_index(name='FilteredCount')
+    grouped_counts_broader = filtered_df_broader.groupby('ESVLocation')['Grammar'].nunique().reset_index(name='UniqueGrammarCountBroader')
     grouped_counts = filtered_df.groupby('ESVLocation')['Grammar'].nunique().reset_index(name='UniqueGrammarCount')
     result = pd.merge(grouped, filtered_count, on='ESVLocation', how='left')
     result = pd.merge(result, grouped_counts, on='ESVLocation', how='left')
+    result = pd.merge(result, grouped_counts_broader, on='ESVLocation', how='left')
+
 
     result['FilteredCount'] = result['FilteredCount'].fillna(0).astype(int)
     result['UniqueGrammarCount'] = result['UniqueGrammarCount'].fillna(0).astype(int)
+    result['UniqueGrammarCountBroader'] = result['UniqueGrammarCountBroader'].fillna(0).astype(int)
     result['proportion'] = result['FilteredCount']*1.0/result['TotalCount']
 
-    result['score'] = 0.8/1.0*result['UniqueGrammarCount'] + \
+    result['score'] = 3.2/(len(grammar_list))*result['UniqueGrammarCount'] + \
+                            (0.8/(len(vocab_list) + len(grammar_list)))*result['UniqueGrammarCountBroader'] + \
                             2.0*result['proportion'] - \
                             0.02*result['TotalCount']
 
@@ -64,10 +79,10 @@ def process_data():
     df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
     merged = pd.merge(wanted, df, on='ESVLocation', how='left')
 
-    merged.loc[merged.query('Vocab <= {} and Grammar == {}'.format(vocab, grammar)).index, 'Highlight'] = True
+    merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list))').index, 'Highlight'] = True
     merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
 
-    merged.loc[merged.query('Vocab < {} and Grammar < {}'.format(vocab, grammar)).index, 'KnownBefore'] = True
+    merged.loc[merged.query('Vocab.isin(@vocab_list) and Grammar.isin(@vocab_list)').index, 'KnownBefore'] = True
     merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
 
     merged['StyledWord'] = merged.apply(lambda row: color_text(row['BHSwordPointed'], row['Highlight'], row['KnownBefore']), axis=1)
