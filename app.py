@@ -107,7 +107,7 @@ def process_data():
     data = request.get_json()
     grammar = data['input1']
     vocab = data['input2']
-    window_size = data['integerInput']
+    window_size = int(data['integerInput'])
 
     grammar_li = grammar.split(',')
     vocab_li = vocab.split(',')
