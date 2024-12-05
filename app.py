@@ -217,8 +217,7 @@ def process_data():
 
         result_grouped['score'] = 3.2/(len(grammar_list))*result_grouped['RollingUniqueGrammarCount'] + \
                                 (0.8/(len(vocab_list) + len(grammar_list)))*result_grouped['RollingUniqueGrammarBroaderCount'] + \
-                                2.0*result_grouped['RollingProportion'] - \
-                                0.02*result_grouped['RollingTotalCount']
+                                1.5*result_grouped['RollingProportion']
 
         wanted = result_grouped.query('ValidWindow == True').sort_values('score', ascending=False).head(10)
 
