@@ -283,7 +283,7 @@ def process_data():
         df = pd.read_csv('BHS_w_biblingo.csv')
 
         # Group by bookNumber and process chunks
-        chunks = group_by_book_number(df, chunk_size=10000)
+        chunks = group_by_book_number(df, chunk_size=5000)
         
         results = []
         for chunk in chunks:
@@ -313,4 +313,4 @@ def process_data():
 
 if __name__ == '__main__':
     from os import environ
-    app.run(host='0.0.0.0', port=int(environ.get('PORT', 5000)), timeout=120)
+    app.run(host='0.0.0.0', port=int(environ.get('PORT', 5000)), timeout=180)
