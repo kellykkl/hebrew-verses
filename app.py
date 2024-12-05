@@ -101,105 +101,6 @@ def extend_row_with_verses(row, window_size, df):
     
     return new_df
 
-def group_by_book_number(df, chunk_size):
-    # Group data by bookNumber
-    grouped = df.groupby('bookNumber')
-    chunks = []
-    current_chunk = []
-    current_size = 0
-    
-    # Iterate through groups and accumulate rows in chunks of the specified size
-    for _, group in grouped:
-        group_size = len(group)
-        if current_size + group_size <= chunk_size:
-            current_chunk.append(group)
-            current_size += group_size
-        else:
-            if current_chunk:
-                chunks.append(pd.concat(current_chunk))
-            current_chunk = [group]
-            current_size = group_size
-    
-    if current_chunk:
-        chunks.append(pd.concat(current_chunk))
-    
-    return chunks
-
-def process_chunk(df, grammar_list, vocab_list, window_size):
-
-
-    filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
-    filtered_df_broader = df.query('(Grammar.isin(@grammar_list) or Grammar.isin(@vocab_list) or Grammar == 1.0) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
-
-    # Group by 'ESVLocation' and count rows matching the condition
-    grouped = df.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='TotalCount')
-    filtered_count = filtered_df_broader.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='FilteredCount')
-
-    grouped_counts_broader = (
-        filtered_df_broader
-        .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
-        .agg(lambda x: list(x.unique()))
-        .reset_index(name='UniqueGrammarBroaderList')
-    )
-
-    grouped_counts = (
-        filtered_df
-        .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
-        .agg(lambda x: list(x.unique()))
-        .reset_index(name='UniqueGrammarList')
-    )
-
-    result = pd.merge(grouped, filtered_count, on=['ESVLocation','verseNumber','bookNumber'], how='left')
-    result = pd.merge(result, grouped_counts, on=['ESVLocation','verseNumber','bookNumber'], how='left')
-    result = pd.merge(result, grouped_counts_broader, on=['ESVLocation','verseNumber','bookNumber'], how='left')
-
-    # Sort by bookNumber and verseNumber, then apply grouped rolling
-    result_sorted = result.sort_values(by=['bookNumber', 'verseNumber']).reset_index(drop=True)
-
-    # Apply grouped rolling
-    result_grouped = result_sorted.groupby('bookNumber').apply(grouped_rolling_collect, window=window_size).reset_index(drop=True)
-    
-    result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderList'].apply(lambda x: len(x))
-    result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarList'].apply(lambda x: len(x))
-
-    result_grouped['RollingFilteredCount'] = result_grouped['RollingFilteredCount'].fillna(0).astype(int)
-    result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarCount'].fillna(0).astype(int)
-    result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderCount'].fillna(0).astype(int)
-    result_grouped['RollingProportion'] = result_grouped['RollingFilteredCount']*1.0/result_grouped['RollingTotalCount']
-
-    result_grouped['score'] = 3.2/(len(grammar_list))*result_grouped['RollingUniqueGrammarCount'] + \
-                            (0.8/(len(vocab_list) + len(grammar_list)))*result_grouped['RollingUniqueGrammarBroaderCount'] + \
-                            2.0*result_grouped['RollingProportion'] - \
-                            0.02*result_grouped['RollingTotalCount']
-
-    wanted = result_grouped.query('ValidWindow == True').sort_values('score', ascending=False).head(10)
-
-    extended_rows = []
-
-    # Apply the function to each row in the 'wanted' DataFrame
-    for _, row in wanted.iterrows():
-        extended_rows.append(extend_row_with_verses(row, window_size, wanted))
-
-    # Concatenate all extended rows into a single DataFrame
-    extended_df = pd.concat(extended_rows, ignore_index=True)
-    extended_df = extended_df.rename(columns={"ESVLocation": "ESVLocationStart"})
-
-    wanted_df = extended_df[['ESVLocationStart','verseNumber','score']]
-
-    df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
-    merged = pd.merge(wanted_df, df, on='verseNumber', how='left')
-
-    merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)').index, 'Highlight'] = True
-    merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
-
-    merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
-    merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
-
-    merged.loc[merged.query('morphologyDetail.str.contains("proper noun")').index, 'ProperNoun'] = True
-    merged[['ProperNoun']] = merged[['ProperNoun']].fillna(value=False)
-
-    return merged
-
 
 @app.route('/process', methods=['POST'])
 def process_data():
@@ -217,14 +118,12 @@ def process_data():
     grammar_list = [float(x) for x in grammar_li]
     vocab_list = [float(x) for x in vocab_li]
 
+    # Example: Load and manipulate a CSV file
+    df = pd.read_csv('BHS_w_biblingo.csv')
+    filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
+    filtered_df_broader = df.query('(Grammar.isin(@grammar_list) or Grammar.isin(@vocab_list) or Grammar == 1.0) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
 
     if window_size == 1:
-
-        # Example: Load and manipulate a CSV file
-        df = pd.read_csv('BHS_w_biblingo.csv')
-        filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
-        filtered_df_broader = df.query('(Grammar.isin(@grammar_list) or Grammar.isin(@vocab_list) or Grammar == 1.0) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
-
         # Group by 'ESVLocation' and count rows matching the condition
         grouped = df.groupby('ESVLocation').size().reset_index(name='TotalCount')
         filtered_count = filtered_df_broader.groupby('ESVLocation').size().reset_index(name='FilteredCount')
@@ -279,38 +178,94 @@ def process_data():
 
     else:
 
-        # Reading the CSV file
-        df = pd.read_csv('BHS_w_biblingo.csv')
 
-        # Group by bookNumber and process chunks
-        chunks = group_by_book_number(df, chunk_size=5000)
-        
-        results = []
-        for chunk in chunks:
-            result = process_chunk(chunk, grammar_list, vocab_list, window_size)
-            results.append(result)
-        
-        # Concatenate results at the end
-        final_result = pd.concat(results).sort_values(by='score', ascending=False)
-        
-        # Process concatenated results
-        final_result['StyledWord'] = final_result.apply(lambda row: color_text(row['BHSwordPointed'], row['Highlight'], row['KnownBefore'], row['ProperNoun']), axis=1)
-        concatenated = (
-            final_result.sort_values(by=['ESVLocation', 'BHSwordSort'])
-                        .groupby(['ESVLocation','score'])['StyledWord']
-                        .apply(lambda x: " ".join(x))
-                        .reset_index(name='Concatenated Verse')
+        # Group by 'ESVLocation' and count rows matching the condition
+        grouped = df.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='TotalCount')
+        filtered_count = filtered_df_broader.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='FilteredCount')
+
+        grouped_counts_broader = (
+            filtered_df_broader
+            .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
+            .agg(lambda x: list(x.unique()))
+            .reset_index(name='UniqueGrammarBroaderList')
         )
+
+        grouped_counts = (
+            filtered_df
+            .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
+            .agg(lambda x: list(x.unique()))
+            .reset_index(name='UniqueGrammarList')
+        )
+
+        result = pd.merge(grouped, filtered_count, on=['ESVLocation','verseNumber','bookNumber'], how='left')
+        result = pd.merge(result, grouped_counts, on=['ESVLocation','verseNumber','bookNumber'], how='left')
+        result = pd.merge(result, grouped_counts_broader, on=['ESVLocation','verseNumber','bookNumber'], how='left')
+
+        # Sort by bookNumber and verseNumber, then apply grouped rolling
+        result_sorted = result.sort_values(by=['bookNumber', 'verseNumber']).reset_index(drop=True)
+
+        # Apply grouped rolling
+        result_grouped = result_sorted.groupby('bookNumber').apply(grouped_rolling_collect, window=window_size).reset_index(drop=True)
+        
+        result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderList'].apply(lambda x: len(x))
+        result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarList'].apply(lambda x: len(x))
+
+        result_grouped['RollingFilteredCount'] = result_grouped['RollingFilteredCount'].fillna(0).astype(int)
+        result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarCount'].fillna(0).astype(int)
+        result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderCount'].fillna(0).astype(int)
+        result_grouped['RollingProportion'] = result_grouped['RollingFilteredCount']*1.0/result_grouped['RollingTotalCount']
+
+        result_grouped['score'] = 3.2/(len(grammar_list))*result_grouped['RollingUniqueGrammarCount'] + \
+                                (0.8/(len(vocab_list) + len(grammar_list)))*result_grouped['RollingUniqueGrammarBroaderCount'] + \
+                                2.0*result_grouped['RollingProportion'] - \
+                                0.02*result_grouped['RollingTotalCount']
+
+        wanted = result_grouped.query('ValidWindow == True').sort_values('score', ascending=False).head(10)
+
+        extended_rows = []
+
+        # Apply the function to each row in the 'wanted' DataFrame
+        for _, row in wanted.iterrows():
+            extended_rows.append(extend_row_with_verses(row, window_size, wanted))
+
+        # Concatenate all extended rows into a single DataFrame
+        extended_df = pd.concat(extended_rows, ignore_index=True)
+        extended_df = extended_df.rename(columns={"ESVLocation": "ESVLocationStart"})
+
+        wanted_df = extended_df[['ESVLocationStart','verseNumber','score']]
+
+        df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
+        merged = pd.merge(wanted_df, df, on='verseNumber', how='left')
+
+        merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)').index, 'Highlight'] = True
+        merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
+
+        merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
+        merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
+
+        merged.loc[merged.query('morphologyDetail.str.contains("proper noun")').index, 'ProperNoun'] = True
+        merged[['ProperNoun']] = merged[['ProperNoun']].fillna(value=False)
+
+        merged['StyledWord'] = merged.apply(lambda row: color_text(row['BHSwordPointed'], row['Highlight'], row['KnownBefore'], row['ProperNoun']), axis=1)
+
+         
+        concatenated = (
+            merged.sort_values(by=['ESVLocationStart', 'BHSwordSort'])  # Sort within each group
+                  .groupby(['ESVLocationStart','score'])['StyledWord']           # Group by ESVLocation
+                  .apply(lambda x: " ".join(x))                   # Concatenate strings
+                  .reset_index(name='Concatenated Verse')         # Create a new column
+        )
+
+        # Apply the cleaning function to the 'Concatenated Verse' column
         concatenated['Concatenated Verse'] = concatenated['Concatenated Verse'].apply(clean_hebrew_text)
+
 
         # Replace NaN with None (JSON-compliant null)
         concatenated = concatenated.where(pd.notnull(concatenated), None).sort_values('score', ascending=False)
-        
-
 
     # Return the processed data
     return jsonify(concatenated.to_dict(orient='records'))
 
 if __name__ == '__main__':
     from os import environ
-    app.run(host='0.0.0.0', port=int(environ.get('PORT', 5000)), timeout=180)
+    app.run(host='0.0.0.0', port=int(environ.get('PORT', 5000)))
