@@ -101,6 +101,32 @@ def extend_row_with_verses(row, window_size, df):
     
     return new_df
 
+# Helper function to check overlap
+def check_overlap(selected, current_row, window_size=5):
+    for row in selected:
+        # Calculate the range of verses for the existing row
+        existing_start = row['verseNumber']
+        existing_end = existing_start + window_size - 1
+        
+        # Calculate the range of verses for the current row
+        current_start = current_row['verseNumber']
+        current_end = current_start + window_size - 1
+        
+        # Check for overlap
+        if not (current_end < existing_start or current_start > existing_end):
+            return True
+    return False
+
+# Function to select top non-overlapping rows
+def get_top_non_overlapping(df, top_n=10, window_size=5):
+    selected = []
+    for _, row in df.iterrows():
+        if len(selected) >= top_n:
+            break
+        if not check_overlap(selected, row, window_size):
+            selected.append(row)
+    return pd.DataFrame(selected)
+
 
 @app.route('/process', methods=['POST'])
 def process_data():
@@ -219,7 +245,11 @@ def process_data():
                                 (0.8/(len(vocab_list) + len(grammar_list)))*result_grouped['RollingUniqueGrammarBroaderCount'] + \
                                 1.5*result_grouped['RollingProportion']
 
-        wanted = result_grouped.query('ValidWindow == True').sort_values('score', ascending=False).head(10)
+        # Sort and filter the result_grouped DataFrame
+        result_grouped = result_grouped.query('ValidWindow == True').sort_values('score', ascending=False)
+
+        # Get the top 10 non-overlapping rows
+        wanted = get_top_non_overlapping(result_grouped, top_n=10, window_size=window_size)
 
         extended_rows = []
 
