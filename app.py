@@ -134,6 +134,11 @@ def process_data():
     grammar = data['input1']
     vocab = data['input2']
     window_size = int(data['integerInput'])
+    books = data['books']
+
+    if books != "All":
+        books_li = books.split(',')
+        books_list = [int(x) for x in books_li]
 
     grammar_li = grammar.split(',')
     vocab_li = vocab.split(',')
@@ -146,6 +151,11 @@ def process_data():
 
     # Example: Load and manipulate a CSV file
     df = pd.read_csv('BHS_w_biblingo.csv')
+
+    if books != "All":
+        df = df.query('bookNumber.isin(@book_list)')
+
+
     filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
     filtered_df_broader = df.query('(Grammar.isin(@grammar_list) or Grammar.isin(@vocab_list) or Grammar == 1.0) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
 
