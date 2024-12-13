@@ -153,7 +153,7 @@ def process_data():
     df = pd.read_csv('BHS_w_biblingo.csv')
 
     if books != "All":
-        df = df.query('bookNumber.isin(@book_list)')
+        df = df.query('bookNumber.isin(@books_list)')
 
 
     filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
