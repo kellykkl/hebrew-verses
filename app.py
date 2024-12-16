@@ -135,7 +135,7 @@ def process_data():
     vocab = data['input2']
     window_size = int(data['integerInput'])
     books = data['books']
-    getGrammar = True
+    getGrammar = data['getGrammar']
 
     if books != "All":
         books_li = books.split(',')
@@ -355,7 +355,7 @@ def process_data():
 
             merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
             merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
-            
+
 
         merged.loc[merged.query('morphologyDetail.str.contains("proper noun")').index, 'ProperNoun'] = True
         merged[['ProperNoun']] = merged[['ProperNoun']].fillna(value=False)
