@@ -33,13 +33,13 @@ def clean_hebrew_text(concatenated_text):
  
     return cleaned_text
 
-def rolling_collect_unique(series, window):
+def rolling_collect(series, window):
     result = []
     for i in range(len(series)):
         # Get the rolling window slice for a forward-looking window
         window_data = series[i: i + window]
         # Flatten the lists, remove NaN, and collect unique values
-        unique_values = list(pd.unique([item for sublist in window_data.dropna() for item in sublist]))
+        unique_values = [item for sublist in window_data.dropna() for item in sublist]
         result.append(unique_values)
     return result
 
@@ -61,8 +61,8 @@ def rolling_count_forward(series, window):
 
 def grouped_rolling_collect(df, window):
     # Apply rolling_collect_unique to each group for a forward-looking window
-    df['RollingUniqueGrammarBroaderList'] = rolling_collect_unique(df['UniqueGrammarBroaderList'], window)
-    df['RollingUniqueGrammarList'] = rolling_collect_unique(df['UniqueGrammarList'], window)
+    df['RollingUniqueGrammarBroaderList'] = rolling_collect(df['UniqueGrammarBroaderList'], window)
+    df['RollingUniqueGrammarList'] = rolling_collect(df['UniqueGrammarList'], window)
     
     # Apply rolling sum for 'TotalCount' and 'FilteredCount'
     df['RollingTotalCount'] = rolling_sum_forward(df['TotalCount'], window)
@@ -222,14 +222,14 @@ def process_data():
         grouped_counts_broader = (
             filtered_df_broader
             .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
-            .agg(lambda x: list(x.unique()))
+            .agg(lambda x: list(x))
             .reset_index(name='UniqueGrammarBroaderList')
         )
 
         grouped_counts = (
             filtered_df
             .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
-            .agg(lambda x: list(x.unique()))
+            .agg(lambda x: list(x))
             .reset_index(name='UniqueGrammarList')
         )
 
@@ -243,8 +243,8 @@ def process_data():
         # Apply grouped rolling
         result_grouped = result_sorted.groupby('bookNumber').apply(grouped_rolling_collect, window=window_size).reset_index(drop=True)
         
-        result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderList'].apply(lambda x: len(x))
-        result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarList'].apply(lambda x: len(x))
+        result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderList'].apply(lambda x: len(set(x)))
+        result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarList'].apply(lambda x: len(set(x)))
 
         result_grouped['RollingFilteredCount'] = result_grouped['RollingFilteredCount'].fillna(0).astype(int)
         result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarCount'].fillna(0).astype(int)
