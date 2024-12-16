@@ -199,7 +199,7 @@ def process_data():
 
             filtered_df = df.query('Vocab.isin(@grammar_list) and (Grammar.isin(@vocab_list) or Grammar.isin(@grammar_list) or Grammar == 1.0)')
             grouped_counts = filtered_df.groupby('ESVLocation')['HebrewLexeme'].nunique().reset_index(name='UniqueVocabCount')
-            result = pd.merge(result, grouped_counts, on='ESVLocation', how='left')
+            result = pd.merge(grouped, grouped_counts, on='ESVLocation', how='left')
             result['score'] = 3.2/(len(grammar_list))*result['UniqueVocabCount'] 
 
             wanted = result.sort_values('score', ascending=False).head(10)
