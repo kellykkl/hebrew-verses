@@ -313,6 +313,7 @@ def process_data():
         else:
 
             grouped = df.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='TotalCount')
+            filtered_df = df.query('Vocab.isin(@grammar_list) and (Grammar.isin(@vocab_list) or Grammar.isin(@grammar_list) or Grammar == 1.0)')
 
             grouped_counts = (
                 filtered_df
