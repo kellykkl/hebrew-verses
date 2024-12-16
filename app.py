@@ -135,6 +135,7 @@ def process_data():
     vocab = data['input2']
     window_size = int(data['integerInput'])
     books = data['books']
+    getGrammar = True
 
     if books != "All":
         books_li = books.split(',')
@@ -156,41 +157,63 @@ def process_data():
         df = df.query('bookNumber.isin(@books_list)')
 
 
-    filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
-    filtered_df_broader = df.query('(Grammar.isin(@grammar_list) or Grammar.isin(@vocab_list) or Grammar == 1.0) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
 
     if window_size == 1:
-        # Group by 'ESVLocation' and count rows matching the condition
+
         grouped = df.groupby('ESVLocation').size().reset_index(name='TotalCount')
-        filtered_count = filtered_df_broader.groupby('ESVLocation').size().reset_index(name='FilteredCount')
-        grouped_counts_broader = filtered_df_broader.groupby('ESVLocation')['Grammar'].nunique().reset_index(name='UniqueGrammarCountBroader')
-        grouped_counts = filtered_df.groupby('ESVLocation')['Grammar'].nunique().reset_index(name='UniqueGrammarCount')
-        result = pd.merge(grouped, filtered_count, on='ESVLocation', how='left')
-        result = pd.merge(result, grouped_counts, on='ESVLocation', how='left')
-        result = pd.merge(result, grouped_counts_broader, on='ESVLocation', how='left')
+
+        if getGrammar:
+            filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
+            filtered_df_broader = df.query('(Grammar.isin(@grammar_list) or Grammar.isin(@vocab_list) or Grammar == 1.0) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
+
+            # Group by 'ESVLocation' and count rows matching the condition
+            filtered_count = filtered_df_broader.groupby('ESVLocation').size().reset_index(name='FilteredCount')
+            grouped_counts_broader = filtered_df_broader.groupby('ESVLocation')['Grammar'].nunique().reset_index(name='UniqueGrammarCountBroader')
+            grouped_counts = filtered_df.groupby('ESVLocation')['Grammar'].nunique().reset_index(name='UniqueGrammarCount')
+            result = pd.merge(grouped, filtered_count, on='ESVLocation', how='left')
+            result = pd.merge(result, grouped_counts, on='ESVLocation', how='left')
+            result = pd.merge(result, grouped_counts_broader, on='ESVLocation', how='left')
 
 
-        result['FilteredCount'] = result['FilteredCount'].fillna(0).astype(int)
-        result['UniqueGrammarCount'] = result['UniqueGrammarCount'].fillna(0).astype(int)
-        result['UniqueGrammarCountBroader'] = result['UniqueGrammarCountBroader'].fillna(0).astype(int)
-        result['proportion'] = result['FilteredCount']*1.0/result['TotalCount']
+            result['FilteredCount'] = result['FilteredCount'].fillna(0).astype(int)
+            result['UniqueGrammarCount'] = result['UniqueGrammarCount'].fillna(0).astype(int)
+            result['UniqueGrammarCountBroader'] = result['UniqueGrammarCountBroader'].fillna(0).astype(int)
+            result['proportion'] = result['FilteredCount']*1.0/result['TotalCount']
 
-        result['score'] = 3.2/(len(grammar_list))*result['UniqueGrammarCount'] + \
-                                (0.8/(len(vocab_list) + len(grammar_list)))*result['UniqueGrammarCountBroader'] + \
-                                2.0*result['proportion'] - \
-                                0.02*result['TotalCount']
+            result['score'] = 3.2/(len(grammar_list))*result['UniqueGrammarCount'] + \
+                                    (0.8/(len(vocab_list) + len(grammar_list)))*result['UniqueGrammarCountBroader'] + \
+                                    2.0*result['proportion'] - \
+                                    0.02*result['TotalCount']
 
-        wanted = result.sort_values('score', ascending=False).head(10)
+            wanted = result.sort_values('score', ascending=False).head(10)
+
+            df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
+            merged = pd.merge(wanted, df, on='ESVLocation', how='left')
+
+            merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)').index, 'Highlight'] = True
+            merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
+
+            merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
+            merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
+        else:
+
+            filtered_df = df.query('Vocab.isin(@grammar_list) and (Grammar.isin(@vocab_list) or Grammar.isin(@grammar_list) or Grammar == 1.0)')
+            grouped_counts = filtered_df.groupby('ESVLocation')['HebrewLexeme'].nunique().reset_index(name='UniqueVocabCount')
+            result = pd.merge(result, grouped_counts, on='ESVLocation', how='left')
+            result['score'] = 3.2/(len(grammar_list))*result['UniqueVocabCount'] 
+
+            wanted = result.sort_values('score', ascending=False).head(10)
+
+            df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
+            merged = pd.merge(wanted, df, on='ESVLocation', how='left')
+
+            merged.loc[merged.query('Vocab.isin(@grammar_list) and (Grammar.isin(@vocab_list) or Grammar.isin(@grammar_list) or Grammar == 1.0)').index, 'Highlight'] = True
+            merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
+
+            merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
+            merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
 
 
-        df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
-        merged = pd.merge(wanted, df, on='ESVLocation', how='left')
-
-        merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)').index, 'Highlight'] = True
-        merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
-
-        merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
-        merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
 
         merged.loc[merged.query('morphologyDetail.str.contains("proper noun")').index, 'ProperNoun'] = True
         merged[['ProperNoun']] = merged[['ProperNoun']].fillna(value=False)
@@ -214,73 +237,125 @@ def process_data():
 
     else:
 
+        if getGrammar:
 
-        # Group by 'ESVLocation' and count rows matching the condition
-        grouped = df.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='TotalCount')
-        filtered_count = filtered_df_broader.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='FilteredCount')
+            grouped = df.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='TotalCount')
 
-        grouped_counts_broader = (
-            filtered_df_broader
-            .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
-            .agg(lambda x: list(x))
-            .reset_index(name='UniqueGrammarBroaderList')
-        )
+            filtered_df = df.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
+            filtered_df_broader = df.query('(Grammar.isin(@grammar_list) or Grammar.isin(@vocab_list) or Grammar == 1.0) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)')
 
-        grouped_counts = (
-            filtered_df
-            .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
-            .agg(lambda x: list(x))
-            .reset_index(name='UniqueGrammarList')
-        )
+            # Group by 'ESVLocation' and count rows matching the condition
+            filtered_count = filtered_df_broader.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='FilteredCount')
 
-        result = pd.merge(grouped, filtered_count, on=['ESVLocation','verseNumber','bookNumber'], how='left')
-        result = pd.merge(result, grouped_counts, on=['ESVLocation','verseNumber','bookNumber'], how='left')
-        result = pd.merge(result, grouped_counts_broader, on=['ESVLocation','verseNumber','bookNumber'], how='left')
+            grouped_counts_broader = (
+                filtered_df_broader
+                .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
+                .agg(lambda x: list(x))
+                .reset_index(name='UniqueGrammarBroaderList')
+            )
 
-        # Sort by bookNumber and verseNumber, then apply grouped rolling
-        result_sorted = result.sort_values(by=['bookNumber', 'verseNumber']).reset_index(drop=True)
+            grouped_counts = (
+                filtered_df
+                .groupby(['ESVLocation','verseNumber','bookNumber'])['Grammar']
+                .agg(lambda x: list(x))
+                .reset_index(name='UniqueGrammarList')
+            )
 
-        # Apply grouped rolling
-        result_grouped = result_sorted.groupby('bookNumber').apply(grouped_rolling_collect, window=window_size).reset_index(drop=True)
-        
-        result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderList'].apply(lambda x: len(set(x)))
-        result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarList'].apply(lambda x: len(set(x)))
+            result = pd.merge(grouped, filtered_count, on=['ESVLocation','verseNumber','bookNumber'], how='left')
+            result = pd.merge(result, grouped_counts, on=['ESVLocation','verseNumber','bookNumber'], how='left')
+            result = pd.merge(result, grouped_counts_broader, on=['ESVLocation','verseNumber','bookNumber'], how='left')
 
-        result_grouped['RollingFilteredCount'] = result_grouped['RollingFilteredCount'].fillna(0).astype(int)
-        result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarCount'].fillna(0).astype(int)
-        result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderCount'].fillna(0).astype(int)
-        result_grouped['RollingProportion'] = result_grouped['RollingFilteredCount']*1.0/result_grouped['RollingTotalCount']
+            # Sort by bookNumber and verseNumber, then apply grouped rolling
+            result_sorted = result.sort_values(by=['bookNumber', 'verseNumber']).reset_index(drop=True)
 
-        result_grouped['score'] = 3.2/(len(grammar_list))*result_grouped['RollingUniqueGrammarCount'] + \
-                                (0.8/(len(vocab_list) + len(grammar_list)))*result_grouped['RollingUniqueGrammarBroaderCount'] + \
-                                1.5*result_grouped['RollingProportion']
+            # Apply grouped rolling
+            result_grouped = result_sorted.groupby('bookNumber').apply(grouped_rolling_collect, window=window_size).reset_index(drop=True)
+            
+            result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderList'].apply(lambda x: len(set(x)))
+            result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarList'].apply(lambda x: len(set(x)))
 
-        # Sort and filter the result_grouped DataFrame
-        result_grouped = result_grouped.query('ValidWindow == True').sort_values('score', ascending=False)
+            result_grouped['RollingFilteredCount'] = result_grouped['RollingFilteredCount'].fillna(0).astype(int)
+            result_grouped['RollingUniqueGrammarCount'] = result_grouped['RollingUniqueGrammarCount'].fillna(0).astype(int)
+            result_grouped['RollingUniqueGrammarBroaderCount'] = result_grouped['RollingUniqueGrammarBroaderCount'].fillna(0).astype(int)
+            result_grouped['RollingProportion'] = result_grouped['RollingFilteredCount']*1.0/result_grouped['RollingTotalCount']
 
-        # Get the top 10 non-overlapping rows
-        wanted = get_top_non_overlapping(result_grouped, top_n=10, window_size=window_size)
+            result_grouped['score'] = 3.2/(len(grammar_list))*result_grouped['RollingUniqueGrammarCount'] + \
+                                    (0.8/(len(vocab_list) + len(grammar_list)))*result_grouped['RollingUniqueGrammarBroaderCount'] + \
+                                    1.5*result_grouped['RollingProportion']
 
-        extended_rows = []
+            # Sort and filter the result_grouped DataFrame
+            result_grouped = result_grouped.query('ValidWindow == True').sort_values('score', ascending=False)
 
-        # Apply the function to each row in the 'wanted' DataFrame
-        for _, row in wanted.iterrows():
-            extended_rows.append(extend_row_with_verses(row, window_size, wanted))
+            # Get the top 10 non-overlapping rows
+            wanted = get_top_non_overlapping(result_grouped, top_n=10, window_size=window_size)
 
-        # Concatenate all extended rows into a single DataFrame
-        extended_df = pd.concat(extended_rows, ignore_index=True)
-        extended_df = extended_df.rename(columns={"ESVLocation": "ESVLocationStart"})
+            extended_rows = []
 
-        wanted_df = extended_df[['ESVLocationStart','verseNumber','score']]
+            # Apply the function to each row in the 'wanted' DataFrame
+            for _, row in wanted.iterrows():
+                extended_rows.append(extend_row_with_verses(row, window_size, wanted))
 
-        df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
-        merged = pd.merge(wanted_df, df, on='verseNumber', how='left')
+            # Concatenate all extended rows into a single DataFrame
+            extended_df = pd.concat(extended_rows, ignore_index=True)
+            extended_df = extended_df.rename(columns={"ESVLocation": "ESVLocationStart"})
 
-        merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)').index, 'Highlight'] = True
-        merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
+            wanted_df = extended_df[['ESVLocationStart','verseNumber','score']]
 
-        merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
-        merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
+            df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
+            merged = pd.merge(wanted_df, df, on='verseNumber', how='left')
+
+            merged.loc[merged.query('Grammar.isin(@grammar_list) and (Vocab.isin(@vocab_list) or Vocab.isin(@grammar_list) or Vocab == 1.0)').index, 'Highlight'] = True
+            merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
+
+            merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
+            merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
+
+        else:
+
+            grouped = df.groupby(['ESVLocation','verseNumber','bookNumber']).size().reset_index(name='TotalCount')
+
+            grouped_counts = (
+                filtered_df
+                .groupby(['ESVLocation','verseNumber','bookNumber'])['HebrewLexeme']
+                .agg(lambda x: list(x))
+                .reset_index(name='VocabList')
+            )
+
+            result = pd.merge(grouped, grouped_counts, on=['ESVLocation','verseNumber','bookNumber'], how='left')
+            result_sorted = result.sort_values(by=['bookNumber', 'verseNumber']).reset_index(drop=True)
+            result_sorted['RollingVocabList'] = rolling_collect(result_sorted['VocabList'], window_size)
+            result_sorted['ValidWindow'] = rolling_count_forward(result_sorted['TotalCount'], window_size)
+            result_sorted['ValidWindow'] = result_sorted['ValidWindow'] >= window_size  # Ensure at least 'window' valid entries
+
+            result_sorted['RollingVocabCount'] = result_sorted['RollingVocabList'].apply(lambda x: len(set(x)))
+
+            result_sorted['score'] = 3.2/(len(grammar_list))*result_sorted['RollingVocabCount']
+
+            result_sorted = result_sorted.query('ValidWindow == True').sort_values('score', ascending=False)
+
+            wanted = get_top_non_overlapping(result_sorted, top_n=10, window_size=window_size)
+
+            extended_rows = []
+
+            # Apply the function to each row in the 'wanted' DataFrame
+            for _, row in wanted.iterrows():
+                extended_rows.append(extend_row_with_verses(row, window_size, wanted))
+
+            # Concatenate all extended rows into a single DataFrame
+            extended_df = pd.concat(extended_rows, ignore_index=True)
+            extended_df = extended_df.rename(columns={"ESVLocation": "ESVLocationStart"})
+
+            wanted_df = extended_df[['ESVLocationStart','verseNumber','score']]
+
+            df['BHSwordPointed'] = df['BHSwordPointed'].astype(str)
+            merged = pd.merge(wanted_df, df, on='verseNumber', how='left')
+
+            merged.loc[merged.query('Vocab.isin(@grammar_list) and (Grammar.isin(@vocab_list) or Grammar.isin(@grammar_list) or Grammar == 1.0)').index, 'Highlight'] = True
+            merged[['Highlight']] = merged[['Highlight']].fillna(value=False)
+
+            merged.loc[merged.query('(Vocab.isin(@vocab_list) or Vocab == 1.0) and (Grammar.isin(@vocab_list) or Grammar == 1.0)').index, 'KnownBefore'] = True
+            merged[['KnownBefore']] = merged[['KnownBefore']].fillna(value=False)
+            
 
         merged.loc[merged.query('morphologyDetail.str.contains("proper noun")').index, 'ProperNoun'] = True
         merged[['ProperNoun']] = merged[['ProperNoun']].fillna(value=False)
